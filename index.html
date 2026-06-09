@@ -83,6 +83,12 @@
 
   .empty { grid-column:1/-1; text-align:center; padding:4rem 1rem; color:var(--text3); font-size:15px; }
 
+  /* 카드 수정 버튼 */
+  .card-wrap { position:relative; }
+  .card-wrap .edit-btn { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,0.45); color:#fff; border:none; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.15s; z-index:2; }
+  .card-wrap:hover .edit-btn { opacity:1; }
+  @media(hover:none) { .card-wrap .edit-btn { opacity:1; background:rgba(0,0,0,0.3); } }
+
   /* 모달 */
   .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; padding:1rem; }
   .modal-bg.open { display:flex; }
@@ -275,6 +281,83 @@
   </div>
 </div>
 
+<!-- 수정 모달 -->
+<div class="modal-bg" id="edit-modal" onclick="bgCloseEdit(event)">
+  <div class="modal">
+    <div class="modal-title">자료 수정하기</div>
+    <input type="hidden" id="e-row" />
+
+    <div class="field">
+      <label>비밀번호 *</label>
+      <input type="password" id="e-pw" placeholder="원 비밀번호 입력" />
+      <div class="pw-hint">모르시면 원장선생님께 문의해주세요</div>
+    </div>
+    <div class="field">
+      <label>링크 URL *</label>
+      <input type="url" id="e-url" placeholder="https://" />
+    </div>
+    <div class="field">
+      <label>자료 이름 *</label>
+      <input type="text" id="e-title" placeholder="예) 교통기관 카드 맞추기" />
+    </div>
+    <div class="field">
+      <label>대분류 *</label>
+      <select id="e-main-i"><option value="놀이">놀이</option><option value="업무">업무</option></select>
+    </div>
+    <div class="field">
+      <label>놀이 주제</label>
+      <select id="e-theme-i">
+        <option value="">선택 안 함</option>
+        <option>유치원과 친구</option><option>나와 가족</option><option>우리 동네</option>
+        <option>동식물과 자연</option><option>건강과 안전</option><option>교통기관</option>
+        <option>우리나라</option><option>세계 여러 나라</option><option>환경과 생활</option>
+        <option>봄·여름·가을·겨울</option><option>생명과 우주</option><option>생활도구</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>활동 유형</label>
+      <select id="e-type-i">
+        <option value="">선택 안 함</option>
+        <option>조작놀이</option><option>언어놀이</option><option>수·과학놀이</option>
+        <option>신체놀이</option><option>음악놀이</option><option>미술놀이</option>
+        <option>역할놀이</option><option>게임·퀴즈</option><option>영상·애니메이션</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>대상 연령</label>
+      <select id="e-age-i">
+        <option value="전체">전체</option>
+        <option>만 3세</option><option>만 4세</option><option>만 5세</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>출처 *</label>
+      <select id="e-src-i"><option value="자체개발">⭐ 자체개발</option><option value="퍼옴">🔗 퍼옴</option></select>
+    </div>
+    <div class="field">
+      <label>메모 (선택)</label>
+      <textarea id="e-memo" placeholder="간단한 설명이나 사용 팁을 남겨요"></textarea>
+    </div>
+
+    <!-- 기존 이미지 + 추가 -->
+    <div class="field">
+      <label>스크린샷 (최대 4장)</label>
+      <div class="img-previews" id="edit-img-previews"></div>
+      <div class="img-upload-area" style="margin-top:8px" onclick="document.getElementById('e-imgs').click()">
+        <input type="file" id="e-imgs" accept="image/*" multiple onchange="handleEditImages(event)" />
+        <div class="img-upload-label">📷 <span>이미지 추가</span></div>
+        <div class="img-upload-hint">기존 이미지 유지 + 새 이미지 추가 가능</div>
+      </div>
+    </div>
+
+    <div id="edit-form-msg" class="msg"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeEditModal()">취소</button>
+      <button class="btn-submit" id="edit-submit-btn" onclick="submitEdit()">수정 완료</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL"; // ← 배포 후 여기에 URL 입력
 
@@ -286,7 +369,9 @@ const SAMPLE_DATA = [
 
 let allCards = [];
 let filters  = { main:"전체", theme:"전체", type:"전체", age:"전체", src:"전체" };
-let selectedImages = []; // { file, base64, preview }
+let selectedImages = [];
+let editImages = []; // 수정 모달용: { base64, mimeType, preview, isExisting }
+let editRowIndex = -1;
 
 // ── 이미지 선택 처리 ──────────────────────────
 function handleImages(e) {
@@ -354,7 +439,8 @@ function render() {
     return;
   }
 
-  grid.innerHTML = filtered.map(c => {
+  grid.innerHTML = filtered.map((c, idx) => {
+    const realIdx = allCards.indexOf(c);
     const imgs = (c["이미지URLs"] || "").split(",").map(u => u.trim()).filter(Boolean);
     const n    = imgs.length;
     let thumbHtml;
@@ -373,14 +459,17 @@ function render() {
     const ageTag   = c["대상연령"] && c["대상연령"] !== "전체" ? `<span class="tag tag-age">${c["대상연령"]}</span>` : "";
     const hostname = (() => { try { return new URL(c["URL"]).hostname.replace("www.",""); } catch(_){ return ""; } })();
 
-    return `<a class="card" href="${c["URL"]}" target="_blank" rel="noopener">
-      ${thumbHtml}
-      <div class="card-body">
-        <div class="card-title">${c["제목"]}</div>
-        <div class="tags">${themeTag}${typeTag}${srcTag}${ageTag}</div>
-        <div class="card-url">${hostname}</div>
-      </div>
-    </a>`;
+    return `<div class="card-wrap">
+      <button class="edit-btn" onclick="openEditModal(${realIdx})" title="수정">✏️</button>
+      <a class="card" href="${c["URL"]}" target="_blank" rel="noopener">
+        ${thumbHtml}
+        <div class="card-body">
+          <div class="card-title">${c["제목"]}</div>
+          <div class="tags">${themeTag}${typeTag}${srcTag}${ageTag}</div>
+          <div class="card-url">${hostname}</div>
+        </div>
+      </a>
+    </div>`;
   }).join("");
 }
 
@@ -461,6 +550,115 @@ async function submitCard() {
     showMsg("❌ 서버 연결에 실패했어요", "err");
   }
   btn.textContent = "등록하기"; btn.disabled = false;
+}
+
+// ── 수정 모달 ─────────────────────────────────
+function openEditModal(idx) {
+  const c = allCards[idx];
+  if (!c) return;
+  editRowIndex = idx;
+  editImages = [];
+
+  document.getElementById("e-url").value   = c["URL"]    || "";
+  document.getElementById("e-title").value = c["제목"]   || "";
+  document.getElementById("e-memo").value  = c["메모"]   || "";
+  setSelect("e-main-i",  c["대분류"]   || "놀이");
+  setSelect("e-theme-i", c["놀이주제"] || "");
+  setSelect("e-type-i",  c["활동유형"] || "");
+  setSelect("e-age-i",   c["대상연령"] || "전체");
+  setSelect("e-src-i",   c["출처"]    || "퍼옴");
+
+  const existingUrls = (c["이미지URLs"] || "").split(",").map(u=>u.trim()).filter(Boolean);
+  existingUrls.forEach(url => {
+    editImages.push({ base64:null, mimeType:null, preview:url, isExisting:true, existingUrl:url });
+  });
+  renderEditPreviews();
+  document.getElementById("e-pw").value = "";
+  clearEditMsg();
+  document.getElementById("edit-modal").classList.add("open");
+}
+
+function setSelect(id, val) {
+  const el = document.getElementById(id);
+  for (let o of el.options) { if (o.value === val) { el.value = val; return; } }
+  el.value = "";
+}
+
+function closeEditModal() {
+  document.getElementById("edit-modal").classList.remove("open");
+  editImages = []; editRowIndex = -1; clearEditMsg();
+}
+function bgCloseEdit(e)  { if (e.target === document.getElementById("edit-modal")) closeEditModal(); }
+function clearEditMsg()  { const m = document.getElementById("edit-form-msg"); m.className="msg"; m.textContent=""; }
+function showEditMsg(txt, type) { const m = document.getElementById("edit-form-msg"); m.className=`msg ${type}`; m.textContent=txt; }
+
+function handleEditImages(e) {
+  const files = Array.from(e.target.files);
+  const remaining = 4 - editImages.length;
+  if (remaining <= 0) { alert("이미지는 최대 4장까지 추가할 수 있어요"); return; }
+  files.slice(0, remaining).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const full = ev.target.result;
+      editImages.push({ base64:full.split(",")[1], mimeType:file.type, preview:full, isExisting:false });
+      renderEditPreviews();
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = "";
+}
+
+function renderEditPreviews() {
+  document.getElementById("edit-img-previews").innerHTML = editImages.map((img, i) => `
+    <div class="img-preview-item">
+      <img src="${img.preview}" alt="미리보기 ${i+1}" />
+      <button class="img-remove" onclick="removeEditImage(${i})" aria-label="이미지 삭제">×</button>
+    </div>`).join("");
+}
+
+function removeEditImage(idx) { editImages.splice(idx, 1); renderEditPreviews(); }
+
+async function submitEdit() {
+  const pw    = document.getElementById("e-pw").value.trim();
+  const url   = document.getElementById("e-url").value.trim();
+  const title = document.getElementById("e-title").value.trim();
+  if (!pw)    { showEditMsg("비밀번호를 입력해주세요", "err"); return; }
+  if (!url)   { showEditMsg("링크 URL을 입력해주세요", "err"); return; }
+  if (!title) { showEditMsg("자료 이름을 입력해주세요", "err"); return; }
+
+  const btn = document.getElementById("edit-submit-btn");
+  btn.textContent = "수정 중..."; btn.disabled = true;
+
+  const payload = {
+    action:   "update",
+    password: pw,
+    rowIndex: editRowIndex + 2,
+    title, url,
+    main:    document.getElementById("e-main-i").value,
+    theme:   document.getElementById("e-theme-i").value,
+    actType: document.getElementById("e-type-i").value,
+    age:     document.getElementById("e-age-i").value,
+    src:     document.getElementById("e-src-i").value,
+    memo:    document.getElementById("e-memo").value,
+    existingImageUrls: editImages.filter(i=>i.isExisting).map(i=>i.existingUrl),
+    newImages: editImages.filter(i=>!i.isExisting).map(i=>({ base64:i.base64, mimeType:i.mimeType, name:`${title}_edit` })),
+  };
+
+  if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+    allCards[editRowIndex] = { 제목:title, URL:url, 대분류:payload.main, 놀이주제:payload.theme, 활동유형:payload.actType, 출처:payload.src, 대상연령:payload.age, 메모:payload.memo, 이미지URLs:editImages.map(i=>i.preview).join(",") };
+    render();
+    showEditMsg("✅ 수정됐어요! (테스트 모드)", "ok");
+    btn.textContent = "수정 완료"; btn.disabled = false;
+    return;
+  }
+
+  try {
+    const res  = await fetch(API_URL, { method:"POST", body:JSON.stringify(payload) });
+    const json = await res.json();
+    if (json.status === "ok") { showEditMsg("✅ " + json.message, "ok"); await loadData(); }
+    else showEditMsg("❌ " + json.message, "err");
+  } catch (_) { showEditMsg("❌ 서버 연결에 실패했어요", "err"); }
+  btn.textContent = "수정 완료"; btn.disabled = false;
 }
 
 loadData();
