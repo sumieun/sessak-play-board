@@ -359,7 +359,7 @@
 </div>
 
 <script>
-const API_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AUkAhnTd42Bjzw3c48b3XKSHuoyXlSVP3WuAW2pTV_CfX2zTnMlNLHG1j34j-hzDB_q6pVIkM2NKau8uEbriwjtcI0X9S4UtcWYGnQaQKj51zBk9cgtesUbipOaJ2tQkQuP7_n1P6U7ruxnXZmky1wgTgRswGPV3ADpBzW31yTGVXrtP8Jh4ms7T9wQfsNzER1sdRqlPoLwhMYuL4tXLI8MMlHu-IxnSVe6cfGePCAdMO4hgjzXTDFVA-PYDjXUj6-DtrM2Gxnrg5ribrYkx864&lib=MJDXLl2-8N5ASE7tGWPcw9V4Ifv_FrRG6"; // ← 배포 후 여기에 URL 입력
+const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL"; // ← 배포 후 여기에 URL 입력
 
 const SAMPLE_DATA = [
   { 제목:"뼈 박사 놀이", URL:"https://edupoplab.github.io/bone-puzzle", 대분류:"놀이", 놀이주제:"건강과 안전", 활동유형:"조작놀이", 출처:"자체개발", 대상연령:"전체", 메모:"드래그 앤 드롭으로 뼈 맞추기", 이미지URLs:"" },
@@ -407,7 +407,36 @@ function removeImage(idx) {
   renderPreviews();
 }
 
-// ── 데이터 로드 ───────────────────────────────
+// ── 이미지 1장씩 Drive에 먼저 업로드 ────────────
+async function uploadImageToDrive(img) {
+  if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
+    return img.preview; // 테스트 모드: base64 미리보기 그대로
+  }
+  const res  = await fetch(API_URL, { method:"POST", body: JSON.stringify({
+    action:   "uploadImage",
+    password: document.getElementById("f-pw").value.trim(),
+    base64:   img.base64,
+    mimeType: img.mimeType,
+    name:     img.file ? img.file.name : "image",
+  })});
+  const json = await res.json();
+  if (json.status !== "ok") throw new Error(json.message);
+  return json.url;
+}
+
+async function uploadEditImageToDrive(img, pw) {
+  if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") return img.preview;
+  const res  = await fetch(API_URL, { method:"POST", body: JSON.stringify({
+    action:   "uploadImage",
+    password: pw,
+    base64:   img.base64,
+    mimeType: img.mimeType,
+    name:     "image",
+  })});
+  const json = await res.json();
+  if (json.status !== "ok") throw new Error(json.message);
+  return json.url;
+}
 async function loadData() {
   if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
     allCards = SAMPLE_DATA; render(); return;
@@ -514,9 +543,21 @@ async function submitCard() {
   if (!title) { showMsg("자료 이름을 입력해주세요", "err"); return; }
 
   const btn = document.getElementById("submit-btn");
-  btn.textContent = "등록 중...";
   btn.disabled = true;
 
+  // 이미지 1장씩 먼저 업로드
+  let imageUrls = [];
+  try {
+    for (let i = 0; i < selectedImages.length; i++) {
+      btn.textContent = `이미지 업로드 중... (${i+1}/${selectedImages.length})`;
+      imageUrls.push(await uploadImageToDrive(selectedImages[i]));
+    }
+  } catch (_) {
+    showMsg("❌ 이미지 업로드에 실패했어요. 비밀번호를 확인해주세요", "err");
+    btn.textContent = "등록하기"; btn.disabled = false; return;
+  }
+
+  btn.textContent = "등록 중...";
   const payload = {
     password: pw, title, url,
     main:    document.getElementById("f-main-i").value,
@@ -525,30 +566,22 @@ async function submitCard() {
     age:     document.getElementById("f-age-i").value,
     src:     document.getElementById("f-src-i").value,
     memo:    document.getElementById("f-memo").value,
-    images:  selectedImages.map(img => ({ base64: img.base64, mimeType: img.mimeType, name: img.file.name })),
+    imageUrls,
   };
 
   if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
-    // 테스트 모드
-    allCards.unshift({ 제목:title, URL:url, 대분류:payload.main, 놀이주제:payload.theme, 활동유형:payload.actType, 출처:payload.src, 대상연령:payload.age, 메모:payload.memo, 이미지URLs: selectedImages.map(i=>i.preview).join(",") });
+    allCards.unshift({ 제목:title, URL:url, 대분류:payload.main, 놀이주제:payload.theme, 활동유형:payload.actType, 출처:payload.src, 대상연령:payload.age, 메모:payload.memo, 이미지URLs:imageUrls.join(",") });
     render();
     showMsg("✅ 등록됐어요! (테스트 모드)", "ok");
-    btn.textContent = "등록하기"; btn.disabled = false;
-    return;
+    btn.textContent = "등록하기"; btn.disabled = false; return;
   }
 
   try {
     const res  = await fetch(API_URL, { method:"POST", body: JSON.stringify(payload) });
     const json = await res.json();
-    if (json.status === "ok") {
-      showMsg("✅ " + json.message, "ok");
-      await loadData();
-    } else {
-      showMsg("❌ " + json.message, "err");
-    }
-  } catch (_) {
-    showMsg("❌ 서버 연결에 실패했어요", "err");
-  }
+    if (json.status === "ok") { showMsg("✅ " + json.message, "ok"); await loadData(); }
+    else showMsg("❌ " + json.message, "err");
+  } catch (_) { showMsg("❌ 서버 연결에 실패했어요", "err"); }
   btn.textContent = "등록하기"; btn.disabled = false;
 }
 
@@ -627,8 +660,23 @@ async function submitEdit() {
   if (!title) { showEditMsg("자료 이름을 입력해주세요", "err"); return; }
 
   const btn = document.getElementById("edit-submit-btn");
-  btn.textContent = "수정 중..."; btn.disabled = true;
+  btn.disabled = true;
 
+  // 기존 이미지 URL + 새 이미지 업로드
+  const existingUrls = editImages.filter(i=>i.isExisting).map(i=>i.existingUrl);
+  const newImgs = editImages.filter(i=>!i.isExisting);
+  let newUrls = [];
+  try {
+    for (let i = 0; i < newImgs.length; i++) {
+      btn.textContent = `이미지 업로드 중... (${i+1}/${newImgs.length})`;
+      newUrls.push(await uploadEditImageToDrive(newImgs[i], pw));
+    }
+  } catch (_) {
+    showEditMsg("❌ 이미지 업로드에 실패했어요. 비밀번호를 확인해주세요", "err");
+    btn.textContent = "수정 완료"; btn.disabled = false; return;
+  }
+
+  btn.textContent = "수정 중...";
   const payload = {
     action:   "update",
     password: pw,
@@ -640,16 +688,14 @@ async function submitEdit() {
     age:     document.getElementById("e-age-i").value,
     src:     document.getElementById("e-src-i").value,
     memo:    document.getElementById("e-memo").value,
-    existingImageUrls: editImages.filter(i=>i.isExisting).map(i=>i.existingUrl),
-    newImages: editImages.filter(i=>!i.isExisting).map(i=>({ base64:i.base64, mimeType:i.mimeType, name:`${title}_edit` })),
+    imageUrls: [...existingUrls, ...newUrls],
   };
 
-  if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
-    allCards[editRowIndex] = { 제목:title, URL:url, 대분류:payload.main, 놀이주제:payload.theme, 활동유형:payload.actType, 출처:payload.src, 대상연령:payload.age, 메모:payload.memo, 이미지URLs:editImages.map(i=>i.preview).join(",") };
+  if (API_URL === "https://script.google.com/macros/s/AKfycbwMWRzfJIwUIuYiQXA2LIx8HFYl47qIkVTZ2uHzPMJmkI9h0f2nGFUGXE998MpSnn8/exec") {
+    allCards[editRowIndex] = { 제목:title, URL:url, 대분류:payload.main, 놀이주제:payload.theme, 활동유형:payload.actType, 출처:payload.src, 대상연령:payload.age, 메모:payload.memo, 이미지URLs:payload.imageUrls.join(",") };
     render();
     showEditMsg("✅ 수정됐어요! (테스트 모드)", "ok");
-    btn.textContent = "수정 완료"; btn.disabled = false;
-    return;
+    btn.textContent = "수정 완료"; btn.disabled = false; return;
   }
 
   try {
