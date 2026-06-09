@@ -359,7 +359,7 @@
 </div>
 
 <script>
-const API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL"; // ← 배포 후 여기에 URL 입력
+const API_URL = "https://script.google.com/macros/s/AKfycbzZTNqNlEkIzfDIXnYqd2Ks8fyvr7yEodO3hKqnqCIBiZDnTs0tIUH1kUNsSCoYvPo/exec"; // ← 배포 후 여기에 URL 입력
 
 const SAMPLE_DATA = [
   { 제목:"뼈 박사 놀이", URL:"https://edupoplab.github.io/bone-puzzle", 대분류:"놀이", 놀이주제:"건강과 안전", 활동유형:"조작놀이", 출처:"자체개발", 대상연령:"전체", 메모:"드래그 앤 드롭으로 뼈 맞추기", 이미지URLs:"" },
@@ -695,7 +695,7 @@ async function submitEdit() {
     imageUrls: [...existingUrls, ...newUrls],
   };
 
-  if (API_URL === "https://script.google.com/macros/s/AKfycbzZTNqNlEkIzfDIXnYqd2Ks8fyvr7yEodO3hKqnqCIBiZDnTs0tIUH1kUNsSCoYvPo/exec") {
+  if (API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL") {
     allCards[editRowIndex] = { 제목:title, URL:url, 대분류:payload.main, 놀이주제:payload.theme, 활동유형:payload.actType, 출처:payload.src, 대상연령:payload.age, 메모:payload.memo, 이미지URLs:payload.imageUrls.join(",") };
     render();
     showEditMsg("✅ 수정됐어요! (테스트 모드)", "ok");
