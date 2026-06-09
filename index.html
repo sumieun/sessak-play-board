@@ -691,7 +691,7 @@ async function submitEdit() {
     imageUrls: [...existingUrls, ...newUrls],
   };
 
-  if (API_URL === "https://script.google.com/macros/s/AKfycbwMWRzfJIwUIuYiQXA2LIx8HFYl47qIkVTZ2uHzPMJmkI9h0f2nGFUGXE998MpSnn8/exec") {
+  if (API_URL === "https://script.googleusercontent.com/macros/echo?user_content_key=AUkAhnTd42Bjzw3c48b3XKSHuoyXlSVP3WuAW2pTV_CfX2zTnMlNLHG1j34j-hzDB_q6pVIkM2NKau8uEbriwjtcI0X9S4UtcWYGnQaQKj51zBk9cgtesUbipOaJ2tQkQuP7_n1P6U7ruxnXZmky1wgTgRswGPV3ADpBzW31yTGVXrtP8Jh4ms7T9wQfsNzER1sdRqlPoLwhMYuL4tXLI8MMlHu-IxnSVe6cfGePCAdMO4hgjzXTDFVA-PYDjXUj6-DtrM2Gxnrg5ribrYkx864&lib=MJDXLl2-8N5ASE7tGWPcw9V4Ifv_FrRG6") {
     allCards[editRowIndex] = { 제목:title, URL:url, 대분류:payload.main, 놀이주제:payload.theme, 활동유형:payload.actType, 출처:payload.src, 대상연령:payload.age, 메모:payload.memo, 이미지URLs:payload.imageUrls.join(",") };
     render();
     showEditMsg("✅ 수정됐어요! (테스트 모드)", "ok");
